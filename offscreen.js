@@ -21,12 +21,32 @@ async function startProcessing(streamId, intensity) {
       },
       video: false
     });
+
     currentStream = stream;
+
+    // ストリームが切れたらbackgroundに通知して自動再接続させる
+    stream.getTracks().forEach(track => {
+      track.onended = () => {
+        chrome.runtime.sendMessage({type: 'STREAM_ENDED'});
+      };
+    });
+
     audioCtx = new AudioContext();
+
+    // AudioContextが停止した場合も通知
+    audioCtx.onstatechange = () => {
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {
+          chrome.runtime.sendMessage({type: 'STREAM_ENDED'});
+        });
+      }
+    };
+
     sourceNode = audioCtx.createMediaStreamSource(stream);
     buildChain(intensity);
   } catch (e) {
     console.error('[ClassroomSpeaker] Audio capture failed:', e);
+    chrome.runtime.sendMessage({type: 'STREAM_ENDED'});
   }
 }
 
@@ -41,18 +61,15 @@ function rebuildChain(intensity) {
 function buildChain(intensity) {
   const int = Math.max(0, Math.min(1, intensity));
 
-  // --- ハイパス: 低音カット (150-250Hz) ---
   const hp = audioCtx.createBiquadFilter();
   hp.type = 'highpass';
   hp.frequency.value = 150 + int * 100;
 
-  // --- ローパス: 高音カット → こもり感 (4000-2500Hz) ---
   const lp = audioCtx.createBiquadFilter();
   lp.type = 'lowpass';
   lp.frequency.value = 4000 - int * 1500;
   lp.Q.value = 0.5 + int * 1.5;
 
-  // --- スピーカー歪み (うっすら) ---
   const dist = audioCtx.createWaveShaper();
   const k = int * 8;
   const curve = new Float32Array(256);
@@ -63,14 +80,12 @@ function buildChain(intensity) {
   dist.curve = curve;
   dist.oversample = '2x';
 
-  // --- ダイナミクスコンプレッサー ---
   const comp = audioCtx.createDynamicsCompressor();
   comp.threshold.value = -18 - int * 6;
   comp.ratio.value = 3 + int * 4;
   comp.attack.value = 0.003;
   comp.release.value = 0.15;
 
-  // --- 部屋の反響 (コンボルバー) ---
   const conv = audioCtx.createConvolver();
   conv.buffer = makeRoomIR(audioCtx, int * 0.8);
 
@@ -83,7 +98,6 @@ function buildChain(intensity) {
   const out = audioCtx.createGain();
   out.gain.value = 1.2 + int * 0.3;
 
-  // 接続
   sourceNode.connect(hp);
   hp.connect(lp);
   lp.connect(dist);

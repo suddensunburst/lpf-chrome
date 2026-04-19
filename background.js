@@ -1,5 +1,16 @@
 const OFFSCREEN_URL = chrome.runtime.getURL('offscreen.html');
-let mutedTabId = null;
+
+// Service Worker起動時にストレージから状態を復元
+chrome.storage.local.get(['enabled', 'intensity', 'mutedTabId'], async (state) => {
+  if (state.enabled && state.mutedTabId) {
+    try {
+      await restartCapture(state.mutedTabId, state.intensity ?? 0.6);
+    } catch (_) {
+      // タブが既に閉じられている等
+      chrome.storage.local.set({enabled: false, mutedTabId: null});
+    }
+  }
+});
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'TOGGLE') {
@@ -7,7 +18,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'UPDATE_INTENSITY') {
+    chrome.storage.local.set({intensity: msg.intensity});
     chrome.runtime.sendMessage({type: 'UPDATE_INTENSITY', intensity: msg.intensity});
+    return false;
+  }
+  if (msg.type === 'STREAM_ENDED') {
+    handleStreamEnded();
     return false;
   }
 });
@@ -17,34 +33,50 @@ async function handleToggle({enabled, intensity}) {
   if (!tab) throw new Error('アクティブなタブが見つかりません');
 
   if (enabled) {
-    mutedTabId = tab.id;
-
-    // タブの音声をミュート（オリジナルをシャットアウト）
+    await chrome.storage.local.set({enabled: true, intensity, mutedTabId: tab.id});
     await chrome.tabs.update(tab.id, {muted: true});
-
-    // tabCapture ストリームIDを取得
-    const streamId = await new Promise((resolve, reject) => {
-      chrome.tabCapture.getMediaStreamId({targetTabId: tab.id}, (id) => {
-        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-        else resolve(id);
-      });
-    });
-
-    await ensureOffscreen();
-
-    // Offscreenに処理開始を指示
-    chrome.runtime.sendMessage({type: 'START_PROCESSING', streamId, intensity});
-
+    await restartCapture(tab.id, intensity);
   } else {
-    chrome.runtime.sendMessage({type: 'STOP_PROCESSING'});
-
-    if (mutedTabId !== null) {
-      try { await chrome.tabs.update(mutedTabId, {muted: false}); } catch (_) {}
-      mutedTabId = null;
-    }
+    await stopCapture();
   }
 
   return {ok: true};
+}
+
+async function restartCapture(tabId, intensity) {
+  const streamId = await new Promise((resolve, reject) => {
+    chrome.tabCapture.getMediaStreamId({targetTabId: tabId}, (id) => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(id);
+    });
+  });
+
+  await ensureOffscreen();
+  chrome.runtime.sendMessage({type: 'START_PROCESSING', streamId, intensity});
+}
+
+async function handleStreamEnded() {
+  const state = await chrome.storage.local.get(['enabled', 'mutedTabId', 'intensity']);
+  if (!state.enabled || !state.mutedTabId) return;
+
+  try {
+    // タブがまだ存在するか確認
+    await chrome.tabs.get(state.mutedTabId);
+    await restartCapture(state.mutedTabId, state.intensity ?? 0.6);
+  } catch (_) {
+    // タブが閉じられていたら状態をリセット
+    chrome.storage.local.set({enabled: false, mutedTabId: null});
+  }
+}
+
+async function stopCapture() {
+  chrome.runtime.sendMessage({type: 'STOP_PROCESSING'});
+
+  const {mutedTabId} = await chrome.storage.local.get('mutedTabId');
+  if (mutedTabId) {
+    try { await chrome.tabs.update(mutedTabId, {muted: false}); } catch (_) {}
+  }
+  await chrome.storage.local.set({enabled: false, mutedTabId: null});
 }
 
 async function ensureOffscreen() {
