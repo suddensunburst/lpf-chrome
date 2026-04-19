@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 280px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .icon {
+      font-size: 24px;
+    }
+
+    .title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #a0c4ff;
+    }
+
+    .subtitle {
+      font-size: 11px;
+      color: #888;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #16213e;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider-track {
+      position: absolute;
+      inset: 0;
+      background: #333;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .slider-track::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    input:checked + .slider-track {
+      background: #4a9eff;
+    }
+
+    input:checked + .slider-track::before {
+      transform: translateX(20px);
+    }
+
+    .section {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .intensity-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      flex: 1;
+      height: 4px;
+      background: #333;
+      border-radius: 4px;
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #4a9eff;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .intensity-value {
+      font-size: 12px;
+      color: #4a9eff;
+      width: 32px;
+      text-align: right;
+    }
+
+    .presets {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .preset-btn {
+      flex: 1;
+      background: #0f3460;
+      border: 1px solid #1a4a80;
+      color: #a0c4ff;
+      border-radius: 6px;
+      padding: 5px 4px;
+      font-size: 10px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s;
+    }
+
+    .preset-btn:hover {
+      background: #1a4a80;
+    }
+
+    .preset-btn.active {
+      background: #4a9eff;
+      color: white;
+      border-color: #4a9eff;
+    }
+
+    .status {
+      text-align: center;
+      font-size: 11px;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    .status.on {
+      color: #4a9eff;
+    }
+
+    .viz {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 30px;
+      margin: 10px 0 4px;
+      justify-content: center;
+    }
+
+    .viz-bar {
+      width: 6px;
+      background: #0f3460;
+      border-radius: 2px 2px 0 0;
+      transition: height 0.3s, background 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="icon">🎙️</div>
+    <div>
+      <div class="title">Classroom Speaker</div>
+      <div class="subtitle">TOEIC リスニング訓練</div>
+    </div>
+  </div>
+
+  <div class="toggle-row">
+    <span class="toggle-label">エフェクト</span>
+    <label class="toggle">
+      <input type="checkbox" id="enableToggle">
+      <span class="slider-track"></span>
+    </label>
+  </div>
+
+  <div class="section">
+    <div class="section-label">こもり度</div>
+    <div class="viz" id="viz">
+      <!-- bars filled by JS -->
+    </div>
+    <div class="intensity-row">
+      <input type="range" id="intensitySlider" min="0" max="100" value="70">
+      <span class="intensity-value" id="intensityDisplay">70%</span>
+    </div>
+    <div class="presets">
+      <button class="preset-btn" data-value="30">軽め</button>
+      <button class="preset-btn active" data-value="60">中教室</button>
+      <button class="preset-btn" data-value="85">大講堂</button>
+    </div>
+  </div>
+
+  <div class="status" id="status">オフ</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
