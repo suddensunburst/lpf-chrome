@@ -100,10 +100,10 @@ function buildChain(intensity) {
 
   sourceNode.connect(hp);
   hp.connect(lp);
-  lp.connect(dist);
-  dist.connect(comp);
-  comp.connect(dryGain);
-  comp.connect(conv);
+  lp.connect(comp);
+  comp.connect(dist);
+  dist.connect(dryGain);
+  dist.connect(conv);
   conv.connect(wetGain);
   dryGain.connect(out);
   wetGain.connect(out);
