@@ -1,6 +1,10 @@
+const SCALE = 0.6;
+
 const toggle = document.getElementById('enableToggle');
 const slider = document.getElementById('intensitySlider');
 const display = document.getElementById('intensityDisplay');
+const echoSlider = document.getElementById('echoSlider');
+const echoDisplay = document.getElementById('echoDisplay');
 const status = document.getElementById('status');
 const vizEl = document.getElementById('viz');
 const presetBtns = document.querySelectorAll('.preset-btn');
@@ -15,7 +19,7 @@ const bars = eqFreqs.map(() => {
 });
 
 function updateViz(enabled, pct) {
-  const int = pct / 100;
+  const int = (pct / 100) * SCALE;
   eqFreqs.forEach((freq, i) => {
     let gain;
     const cutoffLow = 150 + int * 100;
@@ -40,16 +44,32 @@ function setStatus(enabled) {
   status.className = 'status' + (enabled ? ' on' : '');
 }
 
-// 状態復元
-chrome.storage.local.get(['enabled', 'intensity'], (res) => {
-  const enabled = res.enabled ?? false;
-  const pct = Math.round((res.intensity ?? 0.6) * 100);
-  toggle.checked = enabled;
-  slider.value = pct;
-  display.textContent = pct + '%';
-  setStatus(enabled);
-  updateViz(enabled, pct);
-  updatePreset(pct);
+let currentTabId = null;
+
+chrome.tabs.query({active: true, currentWindow: true}, ([tab]) => {
+  currentTabId = tab?.id ?? null;
+
+  chrome.storage.local.get(['enabled', 'mutedTabId', 'intensity', 'echoLevel'], (res) => {
+    const globalEnabled = res.enabled ?? false;
+    const isThisTab = res.mutedTabId === currentTabId;
+    const enabled = globalEnabled && isThisTab;
+    const otherTabActive = globalEnabled && !isThisTab;
+    const pct = Math.round(((res.intensity ?? 0.3) / SCALE) * 100);
+    const echoPct = Math.round((res.echoLevel ?? 0.6) * 100);
+    toggle.checked = enabled;
+    toggle.disabled = otherTabActive;
+    slider.value = pct;
+    display.textContent = pct + '%';
+    echoSlider.value = echoPct;
+    echoDisplay.textContent = echoPct + '%';
+    setStatus(enabled);
+    updateViz(enabled, pct);
+    updatePreset(pct);
+    if (otherTabActive) {
+      status.textContent = '別タブで有効';
+      status.className = 'status';
+    }
+  });
 });
 
 // トグル
@@ -58,8 +78,8 @@ toggle.addEventListener('change', () => {
   const pct = parseInt(slider.value);
   setStatus(enabled);
   updateViz(enabled, pct);
-  chrome.storage.local.set({enabled, intensity: pct / 100});
-  chrome.runtime.sendMessage({type: 'TOGGLE', enabled, intensity: pct / 100});
+  chrome.storage.local.set({enabled, intensity: (pct / 100) * SCALE});
+  chrome.runtime.sendMessage({type: 'TOGGLE', enabled, intensity: (pct / 100) * SCALE});
 });
 
 // 強度スライダー（動かしている最中）
@@ -73,9 +93,21 @@ slider.addEventListener('input', () => {
 // 強度スライダー（確定時）
 slider.addEventListener('change', () => {
   const pct = parseInt(slider.value);
-  chrome.storage.local.set({intensity: pct / 100});
+  chrome.storage.local.set({intensity: (pct / 100) * SCALE});
   if (toggle.checked) {
-    chrome.runtime.sendMessage({type: 'UPDATE_INTENSITY', intensity: pct / 100});
+    chrome.runtime.sendMessage({type: 'UPDATE_INTENSITY', intensity: (pct / 100) * SCALE});
+  }
+});
+
+echoSlider.addEventListener('input', () => {
+  echoDisplay.textContent = echoSlider.value + '%';
+});
+
+echoSlider.addEventListener('change', () => {
+  const echoLevel = parseInt(echoSlider.value) / 100;
+  chrome.storage.local.set({echoLevel});
+  if (toggle.checked) {
+    chrome.runtime.sendMessage({type: 'UPDATE_ECHO', echoLevel});
   }
 });
 
